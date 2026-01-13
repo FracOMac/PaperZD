@@ -47,7 +47,7 @@ public:
 private:
 #if WITH_EDITOR
 	/* Sync the animation source and fills this skin file with the registered animations. */
-	UFUNCTION(CallInEditor)
+	UFUNCTION(CallInEditor, Category = "PaperZD")
 	void SyncWithAnimationSource();
 #endif
 };
