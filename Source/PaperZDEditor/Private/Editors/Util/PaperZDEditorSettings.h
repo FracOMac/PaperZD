@@ -3,6 +3,9 @@
 #pragma once
 
 #include "CoreMinimal.h"
+
+#include "Tools/PaperZDExtractFlipbookFromTextureSettings.h"
+
 #include "PaperZDEditorSettings.generated.h"
 
 //fwd declarations
@@ -83,6 +86,9 @@ public:
 	/** Whether to snap to various things */
 	UPROPERTY(EditAnywhere, config, Category = "Timeline settings")
 	TArray<FName> TimelineEnabledSnaps;
+
+    UPROPERTY(config, EditAnywhere, Category = "Extract Flipbook Tool", meta = (ToolTip = "The saved presets for the extractor tool"))
+    TArray<FPaperZDExtractFlipbookPreset> ExtractFlipbookToolPresets;
 
 public:
 	virtual bool CanEditChange(const FProperty* InProperty) const;

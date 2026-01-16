@@ -47,6 +47,7 @@ const FSlateBrush* FPaperZDEditorStyle::GetBrush(FName PropertyName, const ANSIC
 #define BORDER_BRUSH(RelativePath, ...) FSlateBorderBrush(Style->RootToContentDir(RelativePath, TEXT(".png")), __VA_ARGS__)
 #define TTF_FONT(RelativePath, ...)		FSlateFontInfo(Style->RootToContentDir(RelativePath, TEXT(".ttf")), __VA_ARGS__)
 #define OTF_FONT(RelativePath, ...)		FSlateFontInfo(Style->RootToContentDir(RelativePath, TEXT(".otf")), __VA_ARGS__)
+#define DEFAULT_FONT(...)				FCoreStyle::GetDefaultFontStyle(__VA_ARGS__)
 
 const FVector2D Icon16x16(16.0f, 16.0f);
 const FVector2D Icon16x24(16.0f, 24.0f);
@@ -54,6 +55,7 @@ const FVector2D Icon20x20(20.0f, 20.0f);
 const FVector2D Icon25x25(25.0f, 25.0f);
 const FVector2D Icon22x28(22.0f, 28.0f);
 const FVector2D Icon30x30(30.0f, 30.0f);
+const FVector2D Icon32x32(32.0f, 32.0f);
 const FVector2D Icon40x40(40.0f, 40.0f);
 const FVector2D Icon40x25(40.0f, 25.0f);
 const FVector2D Icon50x50(50.0f, 50.0f);
@@ -109,6 +111,22 @@ TSharedRef<FSlateStyleSet> FPaperZDEditorStyle::Create()
 	Style->Set("PaperZDEditor.Graph.AnimationPin.Disconnected", new IMAGE_BRUSH("Icons/Graph/AnimPin_Disconnected_22x28", Icon22x28));
 	Style->Set("PaperZDEditor.Graph.AnimationPin.ConnectedHovered", new IMAGE_BRUSH("Icons/Graph/AnimPin_Connected_22x28", Icon22x28, FLinearColor(0.8f, 0.8f, 0.8f)));
 	Style->Set("PaperZDEditor.Graph.AnimationPin.DisconnectedHovered", new IMAGE_BRUSH("Icons/Graph/AnimPin_Disconnected_22x28", Icon22x28, FLinearColor(0.8f, 0.8f, 0.8f)));
+
+	//Tool Icons
+    Style->Set("PaperZDEditor.Tools.PluginAction", new IMAGE_BRUSH("Icons/Tools/Plugin_32", Icon32x32));
+    Style->Set("PaperZDEditor.Tools.ExtractAction", new IMAGE_BRUSH("Icons/Tools/Extract_16", Icon16x16));
+
+    Style->Set("PaperZDEditor.Tools.ViewportTitleBackground", new BOX_BRUSH("Icons/Tools/TitleBackground", FMargin(0)));
+
+    const FTextBlockStyle& NormalText = FAppStyle::Get().GetWidgetStyle<FTextBlockStyle>("NormalText");
+    Style->Set("PaperZDEditor.Tools.ViewportZoomTextStyle", FTextBlockStyle(NormalText)
+        .SetFont(DEFAULT_FONT("BoldCondensed", 16))
+    );
+
+    Style->Set("PaperZDEditor.Tools.ViewportTitleTextStyle", FTextBlockStyle(NormalText)
+        .SetFont(DEFAULT_FONT("Regular", 18))
+        .SetColorAndOpacity(FLinearColor(1.0, 1.0f, 1.0f, 0.5f))
+    );
 
 	return Style;
 }

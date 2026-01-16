@@ -90,9 +90,13 @@ public class PaperZDEditor : ModuleRules
                 "SubobjectDataInterface",
                 "SequencerCore",
 
+                //Tools
+                "Paper2DEditor",
+                "ToolWidgets",
+                "RenderCore",
+
                 //Plugin Management
                 "Projects",
-                
 
                 //ENDCHECK
                 "PaperZD"
