@@ -262,7 +262,10 @@ void SPaperZDExtractFlipbookFromTextureDialog::Construct(const FArguments& InArg
     DialogSettings->AddToRoot();
 
     FString TextureName = FPaths::GetBaseFilename(SourceTexture->GetPathName());
-    TextureName.ReplaceInline(TEXT("T_"), TEXT(""));
+    if (TextureName.StartsWith(TEXT("T_"), ESearchCase::CaseSensitive))
+    {
+        TextureName.RightChopInline(2);
+    }
 
     DialogSettings->Naming.FlipbookNamingTemplate = "FB_" + TextureName;
     DialogSettings->Naming.SpriteNamingTemplate = "S_" + TextureName;
@@ -924,7 +927,7 @@ void SPaperZDExtractFlipbookFromTextureDialog::ExtractFlipbooks()
         }
     }
 
-    if (AnimationSource && !bCancelled && DialogSettings->Animation.bCreateAnimationSkin)
+    if (AnimationSource && !bCancelled && !DialogSettings->Animation.AnimationSkinSettings.IsEmpty())
     {
         for (int32 i = 0; i < DialogSettings->Animation.AnimationSkinSettings.Num(); ++i)
         {
@@ -964,38 +967,66 @@ void SPaperZDExtractFlipbookFromTextureDialog::ExtractFlipbooks()
                             }
                         }
                     }
+                }
 
+                if (!AnimationSkinSequenceFlipbooks.IsEmpty())
+                {
                     AnimationSkinSequences.Add(AnimationSkinSequence, AnimationSkinSequenceFlipbooks);
                 }
             }
 
-            FString AnimationSkinName = DialogSettings->Naming.AnimationSkinNamingTemplate;
-            FString Path = FPaths::GetPath(SourceTexture->GetOutermost()->GetName()) / AnimationSkinName;
-
-            FString Name, PackageName, Suffix;
-            AssetToolsModule.Get().CreateUniqueAssetName(Path, Suffix, PackageName, Name);
-            const FString PackagePath = FPackageName::GetLongPackagePath(PackageName);
-            UPackage* Package = CreatePackage(*PackageName);
-
-            if (UPaperZDAnimationSkin_Flipbook* NewAsset = NewObject<UPaperZDAnimationSkin_Flipbook>(Package, UPaperZDAnimationSkin_Flipbook::StaticClass(), *Name, RF_Public | RF_Standalone | RF_Transactional))
+            UPaperZDAnimationSkin_Flipbook* AnimationSkin = SkinSettings.AnimationSkin;
+            if (!AnimationSkin)
             {
-                NewAsset->SetAnimationSource(AnimationSource);
+                FString AnimationSkinName = DialogSettings->Naming.AnimationSkinNamingTemplate;
+                FString Path = FPaths::GetPath(SourceTexture->GetOutermost()->GetName()) / AnimationSkinName;
 
-                for (auto& Pair : AnimationSkinSequences)
+                FString Name, PackageName, Suffix;
+                AssetToolsModule.Get().CreateUniqueAssetName(Path, Suffix, PackageName, Name);
+                const FString PackagePath = FPackageName::GetLongPackagePath(PackageName);
+                UPackage* Package = CreatePackage(*PackageName);
+
+                if (UPaperZDAnimationSkin_Flipbook* NewAsset = NewObject<UPaperZDAnimationSkin_Flipbook>(Package, UPaperZDAnimationSkin_Flipbook::StaticClass(), *Name, RF_Public | RF_Standalone | RF_Transactional))
                 {
-                    UPaperZDAnimSequence_Flipbook* AnimationSkinSequence = Pair.Key;
-                    TArray<TObjectPtr<UPaperFlipbook>>& AnimationSkinSequenceFlipbooks = Pair.Value;
+                    NewAsset->SetAnimationSource(AnimationSource);
 
-                    FPaperZDFlipbookSkinData SkinData;
-                    SkinData.AnimationDirections = AnimationSkinSequenceFlipbooks;
-                    NewAsset->SkinsPerAnimation.Add(AnimationSkinSequence, SkinData);
+                    FAssetRegistryModule::AssetCreated(NewAsset);
+                    ObjectsToSync.Add(NewAsset);
+
+                    AnimationSkin = NewAsset;
+                }
+            }
+
+            if (AnimationSkin)
+            {
+                // Assign the flipbooks to the skin directions
+                for (auto& Pair : AnimationSkin->SkinsPerAnimation)
+                {
+                    const UPaperZDAnimSequence* AnimationSkinSequence = Pair.Key.IsValid() ? Pair.Key.Get() : nullptr;
+                    TArray<TObjectPtr<UPaperFlipbook>>& AnimationSkinSequenceFlipbooks = Pair.Value.AnimationDirections;
+
+                    for (auto& Pair2 : AnimationSkinSequences)
+                    {
+                        UPaperZDAnimSequence_Flipbook* OtherAnimationSkinSequence = Pair2.Key;
+                        TArray<TObjectPtr<UPaperFlipbook>>& OtherAnimationSkinSequenceFlipbooks = Pair2.Value;
+                        if (AnimationSkinSequence == OtherAnimationSkinSequence)
+                        {
+                            for (int32 m = 0; m < AnimationSkinSequenceFlipbooks.Num(); ++m)
+                            {
+                                // Prevent replacing the skin flipbooks if null (only replace the newly created ones)
+                                if (OtherAnimationSkinSequenceFlipbooks[m])
+                                {
+                                    AnimationSkinSequenceFlipbooks[m] = OtherAnimationSkinSequenceFlipbooks[m];
+                                }
+                            }
+
+                            break;
+                        }
+                    }
                 }
 
-                FAssetRegistryModule::AssetCreated(NewAsset);
-                NewAsset->MarkPackageDirty();
-                NewAsset->PostEditChange();
-
-                ObjectsToSync.Add(NewAsset);
+                AnimationSkin->MarkPackageDirty();
+                AnimationSkin->PostEditChange();
             }
         }
     }
@@ -1068,11 +1099,12 @@ void SPaperZDExtractFlipbookFromTextureDialog::OnFinishedChangingProperties(cons
             }
         }
 
-        if (PropertyName == GET_MEMBER_NAME_CHECKED(FPaperZDExtractFlipbooksAnimationSettings, AnimationSkinSettings))
+        if ((PropertyName == GET_MEMBER_NAME_CHECKED(FPaperZDExtractFlipbooksAnimationSettings, AnimationSkinSettings) && PropertyChangedEvent.ChangeType == EPropertyChangeType::ArrayAdd) ||
+            PropertyName == GET_MEMBER_NAME_CHECKED(FPaperZDExtractFlipbooksAnimationSkinSettings, AnimationSkin))
         {
-            if (PropertyChangedEvent.ChangeType == EPropertyChangeType::ArrayAdd)
+            for (auto& AnimationSkinSettings : DialogSettings->Animation.AnimationSkinSettings)
             {
-                InitializeAnimationSkinSettings(DialogSettings->Animation.AnimationSkinSettings.Last());
+                InitializeAnimationSkinSettings(AnimationSkinSettings);
             }
         }
     }
@@ -1088,16 +1120,33 @@ void SPaperZDExtractFlipbookFromTextureDialog::InitializeFlipbookExtractSettings
 
 void SPaperZDExtractFlipbookFromTextureDialog::InitializeAnimationSkinSettings(FPaperZDExtractFlipbooksAnimationSkinSettings& SkinSettings)
 {
-    if (DialogSettings->Animation.AnimationSource)
+    SkinSettings.AnimationSequences.Empty();
+    if (DialogSettings->Animation.AnimationSource || SkinSettings.AnimationSkin)
     {
-        TArray<FAssetData> AssetData = IPaperZDEditorProxy::Get()->GetAnimSequencesForSource(DialogSettings->Animation.AnimationSource);
-        
-        for (const FAssetData& Data : AssetData)
+        if (SkinSettings.AnimationSkin)
         {
-            UPaperZDAnimSequence_Flipbook* Sequence = Cast<UPaperZDAnimSequence_Flipbook>(Data.GetAsset());
-            if (Sequence)
+            const auto& SkinsPerAnimation = SkinSettings.AnimationSkin->GetSkinsPerAnimation();
+            for (const auto& Pair : SkinsPerAnimation)
             {
-                SkinSettings.AnimationSequences.Add(Sequence);
+                if (Pair.Key.IsValid())
+                {
+                    if (UPaperZDAnimSequence_Flipbook* Sequence = Cast<UPaperZDAnimSequence_Flipbook>(Pair.Key.Get()))
+                    {
+                        SkinSettings.AnimationSequences.Add(Sequence);
+                    }
+                }
+            }
+        }
+        else
+        {
+            TArray<FAssetData> AssetData = IPaperZDEditorProxy::Get()->GetAnimSequencesForSource(DialogSettings->Animation.AnimationSource);
+            for (const FAssetData& Data : AssetData)
+            {
+                UPaperZDAnimSequence_Flipbook* Sequence = Cast<UPaperZDAnimSequence_Flipbook>(Data.GetAsset());
+                if (Sequence)
+                {
+                    SkinSettings.AnimationSequences.Add(Sequence);
+                }
             }
         }
     }

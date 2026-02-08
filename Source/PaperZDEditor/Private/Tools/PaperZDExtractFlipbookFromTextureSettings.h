@@ -6,6 +6,7 @@
 
 class UPaperZDAnimationSource_Flipbook;
 class UPaperZDAnimSequence_Flipbook;
+class UPaperZDAnimationSkin_Flipbook;
 
 USTRUCT()
 struct FPaperZDExtractFlipbookColoringSettings
@@ -296,9 +297,19 @@ struct FPaperZDExtractFlipbooksAnimationSkinSettings
     GENERATED_BODY()
 
 public:
-    // The animation sequences to use for the created skin
+    // The animation skin to use (leave empty to create a new one)
     UPROPERTY(Category = Animation, EditAnywhere)
+    UPaperZDAnimationSkin_Flipbook* AnimationSkin;
+
+    // The animation sequences available for the skin
+    UPROPERTY(Category = Animation, VisibleAnywhere)
     TArray<UPaperZDAnimSequence_Flipbook*> AnimationSequences;
+
+public:
+	//ctor
+    FPaperZDExtractFlipbooksAnimationSkinSettings()
+	: AnimationSkin(nullptr)
+	{}
 };
 
 USTRUCT()
@@ -323,10 +334,6 @@ public:
     UPROPERTY(Category = Animation, EditAnywhere)
     bool bCreateAnimationSequence;
 
-    // If one or more animation skins should be created with the extracted flipbooks
-    UPROPERTY(Category = Animation, EditAnywhere)
-    bool bCreateAnimationSkin;
-
     // The configuration for the animation sequences created
     UPROPERTY(Category = Animation, EditAnywhere)
     TArray<FPaperZDExtractFlipbooksAnimationSequenceSettings> AnimationSequenceSettings;
@@ -342,7 +349,6 @@ public:
     , bCreateAnimationBlueprint(false)
     , bCreateAnimationSource(false)
     , bCreateAnimationSequence(false)
-    , bCreateAnimationSkin(false)
 	{}
 };
 
