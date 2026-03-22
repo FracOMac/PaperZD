@@ -660,7 +660,7 @@ void SPaperZDExtractFlipbookFromTextureDialog::ExtractFlipbooks()
         Feedback.MakeDialog(true);
 
         FString SpriteNamingTemplate = FlipbookSettings.Naming.SpriteNamingTemplate;
-        if (SpriteNamingTemplate.Find(TEXT("{1}")) == INDEX_NONE)
+        if (SpriteNamingTemplate.Find(TEXT("{1}")) == INDEX_NONE && (FlipbookSettings.Extraction.NumCellsX > 1 || FlipbookSettings.Extraction.NumCellsY > 1))
         {
             SpriteNamingTemplate.Append(TEXT("_{1}"));
         }
