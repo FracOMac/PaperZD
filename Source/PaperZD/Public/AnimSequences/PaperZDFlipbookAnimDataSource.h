@@ -15,11 +15,20 @@
 UENUM()
 enum class EPaperZDFlipbookMirrorMode : uint8
 {
-	None,
-	MirrorHorizontal,
-	MirrorVertical,
-	MirrorBoth,
-	PerFrame,
+	/** No mirroring is applied to any frame. */
+	None UMETA(ToolTip = "No mirroring is applied to any frame."),
+
+	/** Every frame of the animation is mirrored horizontally (flips the sprite's X scale). */
+	MirrorHorizontal UMETA(ToolTip = "Every frame of the animation is mirrored horizontally (flips the sprite's X scale)."),
+
+	/** Every frame of the animation is mirrored vertically (flips the sprite's Z scale). */
+	MirrorVertical UMETA(ToolTip = "Every frame of the animation is mirrored vertically (flips the sprite's Z scale)."),
+
+	/** Every frame of the animation is mirrored both horizontally and vertically. */
+	MirrorBoth UMETA(ToolTip = "Every frame of the animation is mirrored both horizontally and vertically."),
+
+	/** Mirroring is controlled per key frame via the horizontal and vertical checkbox rows below. */
+	PerFrame UMETA(ToolTip = "Mirroring is controlled per key frame via the horizontal and vertical checkbox rows below."),
 };
 
 /* The animation data source to be used by the Flipbook AnimSequence. */
@@ -36,16 +45,16 @@ struct FPaperZDFlipbookAnimDataSource
 	UPROPERTY(EditAnywhere, Category = "AnimSequence")
 	TArray<UPaperFlipbook*> CompositeLayerAnimations;
 
-	/* How this animation's frames should be mirrored. See EPaperZDFlipbookMirrorMode. */
-	UPROPERTY(EditAnywhere, Category = "AnimSequence")
+	/** Controls how this animation's frames are mirrored. Switch to PerFrame to enable the per-key-frame checkbox rows. */
+	UPROPERTY(EditAnywhere, Category = "AnimSequence", meta = (ToolTip = "Controls how this animation's frames are mirrored. Switch to PerFrame to enable the per-key-frame checkbox rows."))
 	EPaperZDFlipbookMirrorMode MirrorMode = EPaperZDFlipbookMirrorMode::None;
 
-	/* Key frame indices that should render horizontally mirrored when MirrorMode == PerFrame. */
-	UPROPERTY(EditAnywhere, Category = "AnimSequence")
+	/** Key frame indices that should render horizontally mirrored when MirrorMode == PerFrame. Edited via the Horizontal checkbox row. */
+	UPROPERTY(EditAnywhere, Category = "AnimSequence", meta = (ToolTip = "Key frame indices that render horizontally mirrored when MirrorMode is PerFrame. Edited via the Horizontal checkbox row."))
 	TArray<int32> MirroredKeyFrames;
 
-	/* Key frame indices that should render vertically mirrored when MirrorMode == PerFrame. */
-	UPROPERTY(EditAnywhere, Category = "AnimSequence")
+	/** Key frame indices that should render vertically mirrored when MirrorMode == PerFrame. Edited via the Vertical checkbox row. */
+	UPROPERTY(EditAnywhere, Category = "AnimSequence", meta = (ToolTip = "Key frame indices that render vertically mirrored when MirrorMode is PerFrame. Edited via the Vertical checkbox row."))
 	TArray<int32> VerticalMirroredKeyFrames;
 
 public:

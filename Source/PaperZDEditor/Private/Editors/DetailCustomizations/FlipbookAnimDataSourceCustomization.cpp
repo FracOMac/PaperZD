@@ -64,12 +64,16 @@ void FPaperZDFlipbookAnimDataSourceCustomization::CustomizeChildren(TSharedRef<I
 	// Only show the per-frame checkbox rows when MirrorMode == PerFrame. Whole-animation modes don't need them.
 	if (IsPerFrameModeActive())
 	{
+		const FText HorizontalRowTooltip = LOCTEXT("HorizontalMirroredFramesTooltip", "Tick each key frame of the assigned flipbook that should render horizontally mirrored (flips the sprite's X scale).");
+		const FText VerticalRowTooltip = LOCTEXT("VerticalMirroredFramesTooltip", "Tick each key frame of the assigned flipbook that should render vertically mirrored (flips the sprite's Z scale).");
+
 		StructBuilder.AddCustomRow(LOCTEXT("HorizontalMirroredFramesFilter", "Mirrored Frames (Horizontal)"))
 			.NameContent()
 			[
 				SNew(STextBlock)
 				.Text(LOCTEXT("HorizontalMirroredFramesLabel", "Mirrored Key Frames (Horizontal)"))
 				.Font(IPropertyTypeCustomizationUtils::GetRegularFont())
+				.ToolTipText(HorizontalRowTooltip)
 			]
 			.ValueContent()
 			.MinDesiredWidth(400.0f)
@@ -84,6 +88,7 @@ void FPaperZDFlipbookAnimDataSourceCustomization::CustomizeChildren(TSharedRef<I
 				SNew(STextBlock)
 				.Text(LOCTEXT("VerticalMirroredFramesLabel", "Mirrored Key Frames (Vertical)"))
 				.Font(IPropertyTypeCustomizationUtils::GetRegularFont())
+				.ToolTipText(VerticalRowTooltip)
 			]
 			.ValueContent()
 			.MinDesiredWidth(400.0f)
