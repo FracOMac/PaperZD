@@ -9,7 +9,7 @@
 /**
  * Controls how a flipbook animation is mirrored at render time.
  * - None: no mirroring.
- * - MirrorHorizontal / MirrorVertical / MirrorBoth: apply the same flip to every key frame.
+ * - Horizontal / Vertical / BothAxes: apply the same flip to every key frame.
  * - PerFrame: per-axis key-frame index lists decide which frames mirror on which axis.
  */
 UENUM()
@@ -19,13 +19,13 @@ enum class EPaperZDFlipbookMirrorMode : uint8
 	None UMETA(ToolTip = "No mirroring is applied to any frame."),
 
 	/** Every frame of the animation is mirrored horizontally (flips the sprite's X scale). */
-	MirrorHorizontal UMETA(ToolTip = "Every frame of the animation is mirrored horizontally (flips the sprite's X scale)."),
+	Horizontal UMETA(DisplayName = "Mirror Horizontal", ToolTip = "Every frame of the animation is mirrored horizontally (flips the sprite's X scale)."),
 
 	/** Every frame of the animation is mirrored vertically (flips the sprite's Z scale). */
-	MirrorVertical UMETA(ToolTip = "Every frame of the animation is mirrored vertically (flips the sprite's Z scale)."),
+	Vertical UMETA(DisplayName = "Mirror Vertical", ToolTip = "Every frame of the animation is mirrored vertically (flips the sprite's Z scale)."),
 
 	/** Every frame of the animation is mirrored both horizontally and vertically. */
-	MirrorBothAxes UMETA(DisplayName = "Mirror Both (Horizontal & Vertical)", ToolTip = "Every frame of the animation is mirrored both horizontally and vertically."),
+	BothAxes UMETA(DisplayName = "Mirror Both (Horizontal & Vertical)", ToolTip = "Every frame of the animation is mirrored both horizontally and vertically."),
 
 	/** Mirroring is controlled per key frame via the horizontal and vertical checkbox rows below. */
 	PerFrame UMETA(ToolTip = "Mirroring is controlled per key frame via the horizontal and vertical checkbox rows below."),
@@ -68,8 +68,8 @@ public:
 	{
 		switch (MirrorMode)
 		{
-		case EPaperZDFlipbookMirrorMode::MirrorHorizontal:
-		case EPaperZDFlipbookMirrorMode::MirrorBothAxes:
+		case EPaperZDFlipbookMirrorMode::Horizontal:
+		case EPaperZDFlipbookMirrorMode::BothAxes:
 			return true;
 		case EPaperZDFlipbookMirrorMode::PerFrame:
 			return MirroredKeyFrames.Contains(KeyFrameIndex);
@@ -83,8 +83,8 @@ public:
 	{
 		switch (MirrorMode)
 		{
-		case EPaperZDFlipbookMirrorMode::MirrorVertical:
-		case EPaperZDFlipbookMirrorMode::MirrorBothAxes:
+		case EPaperZDFlipbookMirrorMode::Vertical:
+		case EPaperZDFlipbookMirrorMode::BothAxes:
 			return true;
 		case EPaperZDFlipbookMirrorMode::PerFrame:
 			return VerticalMirroredKeyFrames.Contains(KeyFrameIndex);
