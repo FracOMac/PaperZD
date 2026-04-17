@@ -4,9 +4,11 @@
 
 #include "CoreMinimal.h"
 #include "IPropertyTypeCustomization.h"
+#include "Layout/Visibility.h"
 #include "PropertyHandle.h"
 
 class IPropertyUtilities;
+class SBox;
 
 /**
  * Property type customization for FPaperZDFlipbookAnimDataSource.
@@ -38,7 +40,15 @@ class FPaperZDFlipbookAnimDataSourceCustomization : public IPropertyTypeCustomiz
 	/** Child handle for the vertical MirroredKeyFrames array. */
 	TSharedPtr<IPropertyHandle> VerticalMirroredKeyFramesHandle;
 
-	/** Property utilities, used to force detail panel refresh. */
+	/**
+	 * Host boxes for the per-axis checkbox widgets. Lets us rebuild just the checkbox grid on flipbook
+	 * assignment changes without forcing a full detail-panel refresh (which would reset sibling
+	 * customizations like the directional-animation direction picker).
+	 */
+	TSharedPtr<SBox> HorizontalCheckboxHost;
+	TSharedPtr<SBox> VerticalCheckboxHost;
+
+	/** Property utilities, retained as a fallback refresh path if targeted updates become impossible. */
 	TSharedPtr<IPropertyUtilities> PropertyUtilities;
 
 public:
@@ -60,15 +70,15 @@ private:
 	/** Called when a frame's mirror checkbox is toggled on a given axis. */
 	void OnFrameMirrorToggled(ECheckBoxState NewState, int32 FrameIndex, EMirrorAxis Axis);
 
-	/** Called when the Animation property changes, forces a UI rebuild. */
+	/** Called when the Animation property changes; swaps the checkbox host content for the new frame count. */
 	void OnAnimationChanged();
-
-	/** Called when MirrorMode changes, forces a UI rebuild so per-frame rows show/hide. */
-	void OnMirrorModeChanged();
 
 	/** Returns the array property handle for the requested axis. */
 	TSharedPtr<IPropertyHandle> GetArrayHandleForAxis(EMirrorAxis Axis) const;
 
 	/** Reads the current MirrorMode via raw struct access. */
 	bool IsPerFrameModeActive() const;
+
+	/** Visibility attribute for the per-frame rows; Visible only when MirrorMode == PerFrame. */
+	EVisibility GetPerFrameRowVisibility() const;
 };

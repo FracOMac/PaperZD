@@ -8,6 +8,7 @@
 #include "IPropertyUtilities.h"
 #include "ScopedTransaction.h"
 #include "Widgets/Input/SCheckBox.h"
+#include "Widgets/Layout/SBox.h"
 #include "Widgets/Layout/SWrapBox.h"
 #include "Widgets/SBoxPanel.h"
 #include "Widgets/Text/STextBlock.h"
@@ -45,7 +46,7 @@ void FPaperZDFlipbookAnimDataSourceCustomization::CustomizeChildren(TSharedRef<I
 	{
 		StructBuilder.AddProperty(AnimationHandle.ToSharedRef());
 
-		// Rebuild checkboxes when the flipbook assignment changes
+		// Swap the checkbox host content when the flipbook assignment changes (no full detail refresh).
 		AnimationHandle->SetOnPropertyValueChanged(FSimpleDelegate::CreateSP(this, &FPaperZDFlipbookAnimDataSourceCustomization::OnAnimationChanged));
 	}
 
@@ -54,49 +55,58 @@ void FPaperZDFlipbookAnimDataSourceCustomization::CustomizeChildren(TSharedRef<I
 		StructBuilder.AddProperty(CompositeLayersHandle.ToSharedRef());
 	}
 
-	// MirrorMode enum dropdown; toggling it shows/hides the per-frame rows below.
+	// MirrorMode dropdown. Visibility of the per-frame rows below is bound to an attribute,
+	// so we intentionally don't hook SetOnPropertyValueChanged here (no refresh needed).
 	if (MirrorModeHandle.IsValid())
 	{
 		StructBuilder.AddProperty(MirrorModeHandle.ToSharedRef());
-		MirrorModeHandle->SetOnPropertyValueChanged(FSimpleDelegate::CreateSP(this, &FPaperZDFlipbookAnimDataSourceCustomization::OnMirrorModeChanged));
 	}
 
-	// Only show the per-frame checkbox rows when MirrorMode == PerFrame. Whole-animation modes don't need them.
-	if (IsPerFrameModeActive())
-	{
-		const FText HorizontalRowTooltip = LOCTEXT("HorizontalMirroredFramesTooltip", "Tick each key frame of the assigned flipbook that should render horizontally mirrored (flips the sprite's X scale).");
-		const FText VerticalRowTooltip = LOCTEXT("VerticalMirroredFramesTooltip", "Tick each key frame of the assigned flipbook that should render vertically mirrored (flips the sprite's Z scale).");
+	// Per-frame checkbox rows. Always added, but only visible when MirrorMode == PerFrame.
+	// Row-level visibility binding lets us avoid ForceRefresh when the mode changes — which would
+	// otherwise reset sibling customizations like the directional-animation direction picker.
+	const TAttribute<EVisibility> PerFrameVisibility = TAttribute<EVisibility>::CreateSP(this, &FPaperZDFlipbookAnimDataSourceCustomization::GetPerFrameRowVisibility);
 
-		StructBuilder.AddCustomRow(LOCTEXT("HorizontalMirroredFramesFilter", "Mirrored Frames (Horizontal)"))
-			.NameContent()
-			[
-				SNew(STextBlock)
-				.Text(LOCTEXT("HorizontalMirroredFramesLabel", "Mirrored Key Frames (Horizontal)"))
-				.Font(IPropertyTypeCustomizationUtils::GetRegularFont())
-				.ToolTipText(HorizontalRowTooltip)
-			]
-			.ValueContent()
-			.MinDesiredWidth(400.0f)
-			.MaxDesiredWidth(0.0f)
+	const FText HorizontalRowTooltip = LOCTEXT("HorizontalMirroredFramesTooltip", "Tick each key frame of the assigned flipbook that should render horizontally mirrored (flips the sprite's X scale).");
+	const FText VerticalRowTooltip = LOCTEXT("VerticalMirroredFramesTooltip", "Tick each key frame of the assigned flipbook that should render vertically mirrored (flips the sprite's Z scale).");
+
+	StructBuilder.AddCustomRow(LOCTEXT("HorizontalMirroredFramesFilter", "Mirrored Frames (Horizontal)"))
+		.Visibility(PerFrameVisibility)
+		.NameContent()
+		[
+			SNew(STextBlock)
+			.Text(LOCTEXT("HorizontalMirroredFramesLabel", "Mirrored Key Frames (Horizontal)"))
+			.Font(IPropertyTypeCustomizationUtils::GetRegularFont())
+			.ToolTipText(HorizontalRowTooltip)
+		]
+		.ValueContent()
+		.MinDesiredWidth(400.0f)
+		.MaxDesiredWidth(0.0f)
+		[
+			SAssignNew(HorizontalCheckboxHost, SBox)
 			[
 				BuildCheckboxWidget(EMirrorAxis::Horizontal)
-			];
-
-		StructBuilder.AddCustomRow(LOCTEXT("VerticalMirroredFramesFilter", "Mirrored Frames (Vertical)"))
-			.NameContent()
-			[
-				SNew(STextBlock)
-				.Text(LOCTEXT("VerticalMirroredFramesLabel", "Mirrored Key Frames (Vertical)"))
-				.Font(IPropertyTypeCustomizationUtils::GetRegularFont())
-				.ToolTipText(VerticalRowTooltip)
 			]
-			.ValueContent()
-			.MinDesiredWidth(400.0f)
-			.MaxDesiredWidth(0.0f)
+		];
+
+	StructBuilder.AddCustomRow(LOCTEXT("VerticalMirroredFramesFilter", "Mirrored Frames (Vertical)"))
+		.Visibility(PerFrameVisibility)
+		.NameContent()
+		[
+			SNew(STextBlock)
+			.Text(LOCTEXT("VerticalMirroredFramesLabel", "Mirrored Key Frames (Vertical)"))
+			.Font(IPropertyTypeCustomizationUtils::GetRegularFont())
+			.ToolTipText(VerticalRowTooltip)
+		]
+		.ValueContent()
+		.MinDesiredWidth(400.0f)
+		.MaxDesiredWidth(0.0f)
+		[
+			SAssignNew(VerticalCheckboxHost, SBox)
 			[
 				BuildCheckboxWidget(EMirrorAxis::Vertical)
-			];
-	}
+			]
+		];
 }
 
 TSharedRef<SWidget> FPaperZDFlipbookAnimDataSourceCustomization::BuildCheckboxWidget(EMirrorAxis Axis)
@@ -238,19 +248,15 @@ void FPaperZDFlipbookAnimDataSourceCustomization::OnFrameMirrorToggled(ECheckBox
 
 void FPaperZDFlipbookAnimDataSourceCustomization::OnAnimationChanged()
 {
-	// Force a detail panel refresh so checkboxes rebuild with the new flipbook's frame count
-	if (PropertyUtilities.IsValid())
+	// Swap only the checkbox-host content so the new flipbook's frame count is reflected,
+	// without triggering a full detail-panel refresh (which would reset sibling customizations).
+	if (HorizontalCheckboxHost.IsValid())
 	{
-		PropertyUtilities->ForceRefresh();
+		HorizontalCheckboxHost->SetContent(BuildCheckboxWidget(EMirrorAxis::Horizontal));
 	}
-}
-
-void FPaperZDFlipbookAnimDataSourceCustomization::OnMirrorModeChanged()
-{
-	// Force a detail panel refresh so per-frame rows appear/disappear based on the new mode
-	if (PropertyUtilities.IsValid())
+	if (VerticalCheckboxHost.IsValid())
 	{
-		PropertyUtilities->ForceRefresh();
+		VerticalCheckboxHost->SetContent(BuildCheckboxWidget(EMirrorAxis::Vertical));
 	}
 }
 
@@ -275,6 +281,11 @@ bool FPaperZDFlipbookAnimDataSourceCustomization::IsPerFrameModeActive() const
 
 	const FPaperZDFlipbookAnimDataSource* DataSource = static_cast<const FPaperZDFlipbookAnimDataSource*>(RawData[0]);
 	return DataSource->MirrorMode == EPaperZDFlipbookMirrorMode::PerFrame;
+}
+
+EVisibility FPaperZDFlipbookAnimDataSourceCustomization::GetPerFrameRowVisibility() const
+{
+	return IsPerFrameModeActive() ? EVisibility::Visible : EVisibility::Collapsed;
 }
 
 #undef LOCTEXT_NAMESPACE
