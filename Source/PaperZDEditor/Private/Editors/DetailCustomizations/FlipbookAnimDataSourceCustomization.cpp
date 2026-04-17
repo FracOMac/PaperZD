@@ -35,8 +35,10 @@ void FPaperZDFlipbookAnimDataSourceCustomization::CustomizeChildren(TSharedRef<I
 
 	// Cache child handles
 	AnimationHandle = InPropertyHandle->GetChildHandle(GET_MEMBER_NAME_CHECKED(FPaperZDFlipbookAnimDataSource, Animation));
-	MirroredKeyFramesHandle = InPropertyHandle->GetChildHandle(GET_MEMBER_NAME_CHECKED(FPaperZDFlipbookAnimDataSource, MirroredKeyFrames));
 	TSharedPtr<IPropertyHandle> CompositeLayersHandle = InPropertyHandle->GetChildHandle(GET_MEMBER_NAME_CHECKED(FPaperZDFlipbookAnimDataSource, CompositeLayerAnimations));
+	MirrorModeHandle = InPropertyHandle->GetChildHandle(GET_MEMBER_NAME_CHECKED(FPaperZDFlipbookAnimDataSource, MirrorMode));
+	HorizontalMirroredKeyFramesHandle = InPropertyHandle->GetChildHandle(GET_MEMBER_NAME_CHECKED(FPaperZDFlipbookAnimDataSource, MirroredKeyFrames));
+	VerticalMirroredKeyFramesHandle = InPropertyHandle->GetChildHandle(GET_MEMBER_NAME_CHECKED(FPaperZDFlipbookAnimDataSource, VerticalMirroredKeyFrames));
 
 	// Show Animation and CompositeLayerAnimations normally
 	if (AnimationHandle.IsValid())
@@ -52,23 +54,47 @@ void FPaperZDFlipbookAnimDataSourceCustomization::CustomizeChildren(TSharedRef<I
 		StructBuilder.AddProperty(CompositeLayersHandle.ToSharedRef());
 	}
 
-	// Replace the raw MirroredKeyFrames array with a checkbox row
-	StructBuilder.AddCustomRow(LOCTEXT("MirroredFramesFilter", "Mirrored Frames"))
-		.NameContent()
-		[
-			SNew(STextBlock)
-			.Text(LOCTEXT("MirroredFramesLabel", "Mirrored Key Frames"))
-			.Font(IPropertyTypeCustomizationUtils::GetRegularFont())
-		]
-		.ValueContent()
-		.MinDesiredWidth(400.0f)
-		.MaxDesiredWidth(0.0f)
-		[
-			BuildCheckboxWidget()
-		];
+	// MirrorMode enum dropdown; toggling it shows/hides the per-frame rows below.
+	if (MirrorModeHandle.IsValid())
+	{
+		StructBuilder.AddProperty(MirrorModeHandle.ToSharedRef());
+		MirrorModeHandle->SetOnPropertyValueChanged(FSimpleDelegate::CreateSP(this, &FPaperZDFlipbookAnimDataSourceCustomization::OnMirrorModeChanged));
+	}
+
+	// Only show the per-frame checkbox rows when MirrorMode == PerFrame. Whole-animation modes don't need them.
+	if (IsPerFrameModeActive())
+	{
+		StructBuilder.AddCustomRow(LOCTEXT("HorizontalMirroredFramesFilter", "Mirrored Frames (Horizontal)"))
+			.NameContent()
+			[
+				SNew(STextBlock)
+				.Text(LOCTEXT("HorizontalMirroredFramesLabel", "Mirrored Key Frames (Horizontal)"))
+				.Font(IPropertyTypeCustomizationUtils::GetRegularFont())
+			]
+			.ValueContent()
+			.MinDesiredWidth(400.0f)
+			.MaxDesiredWidth(0.0f)
+			[
+				BuildCheckboxWidget(EMirrorAxis::Horizontal)
+			];
+
+		StructBuilder.AddCustomRow(LOCTEXT("VerticalMirroredFramesFilter", "Mirrored Frames (Vertical)"))
+			.NameContent()
+			[
+				SNew(STextBlock)
+				.Text(LOCTEXT("VerticalMirroredFramesLabel", "Mirrored Key Frames (Vertical)"))
+				.Font(IPropertyTypeCustomizationUtils::GetRegularFont())
+			]
+			.ValueContent()
+			.MinDesiredWidth(400.0f)
+			.MaxDesiredWidth(0.0f)
+			[
+				BuildCheckboxWidget(EMirrorAxis::Vertical)
+			];
+	}
 }
 
-TSharedRef<SWidget> FPaperZDFlipbookAnimDataSourceCustomization::BuildCheckboxWidget()
+TSharedRef<SWidget> FPaperZDFlipbookAnimDataSourceCustomization::BuildCheckboxWidget(EMirrorAxis Axis)
 {
 	// Read the flipbook from the Animation property
 	UObject* FlipbookObject = nullptr;
@@ -99,6 +125,10 @@ TSharedRef<SWidget> FPaperZDFlipbookAnimDataSourceCustomization::BuildCheckboxWi
 	TSharedRef<SWrapBox> WrapBox = SNew(SWrapBox)
 		.UseAllottedSize(true);
 
+	const FText AxisTooltipFormat = Axis == EMirrorAxis::Horizontal
+		? LOCTEXT("FrameMirrorHorizontalTooltip", "Mirror frame {0} horizontally")
+		: LOCTEXT("FrameMirrorVerticalTooltip", "Mirror frame {0} vertically");
+
 	for (int32 i = 0; i < NumKeyFrames; i++)
 	{
 		WrapBox->AddSlot()
@@ -118,9 +148,9 @@ TSharedRef<SWidget> FPaperZDFlipbookAnimDataSourceCustomization::BuildCheckboxWi
 				.HAlign(HAlign_Center)
 				[
 					SNew(SCheckBox)
-					.IsChecked(this, &FPaperZDFlipbookAnimDataSourceCustomization::IsFrameMirrored, i)
-					.OnCheckStateChanged(this, &FPaperZDFlipbookAnimDataSourceCustomization::OnFrameMirrorToggled, i)
-					.ToolTipText(FText::Format(LOCTEXT("FrameMirrorTooltip", "Mirror frame {0}"), FText::AsNumber(i)))
+					.IsChecked(this, &FPaperZDFlipbookAnimDataSourceCustomization::IsFrameMirrored, i, Axis)
+					.OnCheckStateChanged(this, &FPaperZDFlipbookAnimDataSourceCustomization::OnFrameMirrorToggled, i, Axis)
+					.ToolTipText(FText::Format(AxisTooltipFormat, FText::AsNumber(i)))
 				]
 			];
 	}
@@ -128,29 +158,28 @@ TSharedRef<SWidget> FPaperZDFlipbookAnimDataSourceCustomization::BuildCheckboxWi
 	return WrapBox;
 }
 
-ECheckBoxState FPaperZDFlipbookAnimDataSourceCustomization::IsFrameMirrored(int32 FrameIndex) const
+ECheckBoxState FPaperZDFlipbookAnimDataSourceCustomization::IsFrameMirrored(int32 FrameIndex, EMirrorAxis Axis) const
 {
-	if (!MirroredKeyFramesHandle.IsValid())
-	{
-		return ECheckBoxState::Unchecked;
-	}
-
-	// Read the array through raw data access
+	// Read the struct through raw data access so we can inspect the correct per-axis array
 	TArray<const void*> RawData;
 	StructPropertyHandle->AccessRawData(RawData);
 
 	if (RawData.Num() > 0 && RawData[0] != nullptr)
 	{
 		const FPaperZDFlipbookAnimDataSource* DataSource = static_cast<const FPaperZDFlipbookAnimDataSource*>(RawData[0]);
-		return DataSource->IsKeyFrameMirrored(FrameIndex) ? ECheckBoxState::Checked : ECheckBoxState::Unchecked;
+		const TArray<int32>& Array = Axis == EMirrorAxis::Horizontal
+			? DataSource->MirroredKeyFrames
+			: DataSource->VerticalMirroredKeyFrames;
+		return Array.Contains(FrameIndex) ? ECheckBoxState::Checked : ECheckBoxState::Unchecked;
 	}
 
 	return ECheckBoxState::Unchecked;
 }
 
-void FPaperZDFlipbookAnimDataSourceCustomization::OnFrameMirrorToggled(ECheckBoxState NewState, int32 FrameIndex)
+void FPaperZDFlipbookAnimDataSourceCustomization::OnFrameMirrorToggled(ECheckBoxState NewState, int32 FrameIndex, EMirrorAxis Axis)
 {
-	if (!MirroredKeyFramesHandle.IsValid() || !StructPropertyHandle.IsValid())
+	TSharedPtr<IPropertyHandle> ArrayHandle = GetArrayHandleForAxis(Axis);
+	if (!ArrayHandle.IsValid() || !StructPropertyHandle.IsValid())
 	{
 		return;
 	}
@@ -164,7 +193,9 @@ void FPaperZDFlipbookAnimDataSourceCustomization::OnFrameMirrorToggled(ECheckBox
 	}
 
 	const FPaperZDFlipbookAnimDataSource* DataSource = static_cast<const FPaperZDFlipbookAnimDataSource*>(RawData[0]);
-	TArray<int32> NewMirroredFrames = DataSource->MirroredKeyFrames;
+	TArray<int32> NewMirroredFrames = Axis == EMirrorAxis::Horizontal
+		? DataSource->MirroredKeyFrames
+		: DataSource->VerticalMirroredKeyFrames;
 
 	// Add or remove the frame index
 	if (NewState == ECheckBoxState::Checked)
@@ -197,7 +228,7 @@ void FPaperZDFlipbookAnimDataSourceCustomization::OnFrameMirrorToggled(ECheckBox
 
 	// Apply through the property handle for undo/redo support
 	FScopedTransaction Transaction(LOCTEXT("ToggleMirroredFrame", "Toggle Mirrored Frame"));
-	MirroredKeyFramesHandle->SetValueFromFormattedString(FormattedValue);
+	ArrayHandle->SetValueFromFormattedString(FormattedValue);
 }
 
 void FPaperZDFlipbookAnimDataSourceCustomization::OnAnimationChanged()
@@ -207,6 +238,38 @@ void FPaperZDFlipbookAnimDataSourceCustomization::OnAnimationChanged()
 	{
 		PropertyUtilities->ForceRefresh();
 	}
+}
+
+void FPaperZDFlipbookAnimDataSourceCustomization::OnMirrorModeChanged()
+{
+	// Force a detail panel refresh so per-frame rows appear/disappear based on the new mode
+	if (PropertyUtilities.IsValid())
+	{
+		PropertyUtilities->ForceRefresh();
+	}
+}
+
+TSharedPtr<IPropertyHandle> FPaperZDFlipbookAnimDataSourceCustomization::GetArrayHandleForAxis(EMirrorAxis Axis) const
+{
+	return Axis == EMirrorAxis::Horizontal ? HorizontalMirroredKeyFramesHandle : VerticalMirroredKeyFramesHandle;
+}
+
+bool FPaperZDFlipbookAnimDataSourceCustomization::IsPerFrameModeActive() const
+{
+	if (!StructPropertyHandle.IsValid())
+	{
+		return false;
+	}
+
+	TArray<const void*> RawData;
+	StructPropertyHandle->AccessRawData(RawData);
+	if (RawData.Num() == 0 || RawData[0] == nullptr)
+	{
+		return false;
+	}
+
+	const FPaperZDFlipbookAnimDataSource* DataSource = static_cast<const FPaperZDFlipbookAnimDataSource*>(RawData[0]);
+	return DataSource->MirrorMode == EPaperZDFlipbookMirrorMode::PerFrame;
 }
 
 #undef LOCTEXT_NAMESPACE

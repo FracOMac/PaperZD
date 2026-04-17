@@ -6,6 +6,22 @@
 #include "PaperFlipbook.h"
 #include "PaperZDFlipbookAnimDataSource.generated.h"
 
+/**
+ * Controls how a flipbook animation is mirrored at render time.
+ * - None: no mirroring.
+ * - MirrorHorizontal / MirrorVertical / MirrorBoth: apply the same flip to every key frame.
+ * - PerFrame: per-axis key-frame index lists decide which frames mirror on which axis.
+ */
+UENUM()
+enum class EPaperZDFlipbookMirrorMode : uint8
+{
+	None,
+	MirrorHorizontal,
+	MirrorVertical,
+	MirrorBoth,
+	PerFrame,
+};
+
 /* The animation data source to be used by the Flipbook AnimSequence. */
 USTRUCT()
 struct FPaperZDFlipbookAnimDataSource
@@ -20,9 +36,17 @@ struct FPaperZDFlipbookAnimDataSource
 	UPROPERTY(EditAnywhere, Category = "AnimSequence")
 	TArray<UPaperFlipbook*> CompositeLayerAnimations;
 
-	/* Keyframe indices that should render mirrored for this animation entry. */
+	/* How this animation's frames should be mirrored. See EPaperZDFlipbookMirrorMode. */
+	UPROPERTY(EditAnywhere, Category = "AnimSequence")
+	EPaperZDFlipbookMirrorMode MirrorMode = EPaperZDFlipbookMirrorMode::None;
+
+	/* Key frame indices that should render horizontally mirrored when MirrorMode == PerFrame. */
 	UPROPERTY(EditAnywhere, Category = "AnimSequence")
 	TArray<int32> MirroredKeyFrames;
+
+	/* Key frame indices that should render vertically mirrored when MirrorMode == PerFrame. */
+	UPROPERTY(EditAnywhere, Category = "AnimSequence")
+	TArray<int32> VerticalMirroredKeyFrames;
 
 public:
 	//ctor
@@ -30,9 +54,55 @@ public:
 		: Animation(InFlipbook)
 	{}
 
-	/* Returns true if the provided keyframe index should be rendered mirrored. */
-	bool IsKeyFrameMirrored(int32 KeyFrameIndex) const
+	/* Returns true if the provided key frame index should be rendered horizontally mirrored. */
+	bool IsKeyFrameMirroredHorizontal(int32 KeyFrameIndex) const
 	{
-		return MirroredKeyFrames.Contains(KeyFrameIndex);
+		switch (MirrorMode)
+		{
+		case EPaperZDFlipbookMirrorMode::MirrorHorizontal:
+		case EPaperZDFlipbookMirrorMode::MirrorBoth:
+			return true;
+		case EPaperZDFlipbookMirrorMode::PerFrame:
+			return MirroredKeyFrames.Contains(KeyFrameIndex);
+		default:
+			return false;
+		}
 	}
+
+	/* Returns true if the provided key frame index should be rendered vertically mirrored. */
+	bool IsKeyFrameMirroredVertical(int32 KeyFrameIndex) const
+	{
+		switch (MirrorMode)
+		{
+		case EPaperZDFlipbookMirrorMode::MirrorVertical:
+		case EPaperZDFlipbookMirrorMode::MirrorBoth:
+			return true;
+		case EPaperZDFlipbookMirrorMode::PerFrame:
+			return VerticalMirroredKeyFrames.Contains(KeyFrameIndex);
+		default:
+			return false;
+		}
+	}
+
+	/**
+	 * Migrates data authored before MirrorMode existed: if legacy MirroredKeyFrames has entries
+	 * but MirrorMode is still the default (None), promote it to PerFrame so existing behavior is preserved.
+	 */
+	void PostSerialize(const FArchive& Ar)
+	{
+		if (Ar.IsLoading() && MirrorMode == EPaperZDFlipbookMirrorMode::None && MirroredKeyFrames.Num() > 0)
+		{
+			MirrorMode = EPaperZDFlipbookMirrorMode::PerFrame;
+		}
+	}
+};
+
+/* Enables PostSerialize so legacy MirroredKeyFrames data migrates to MirrorMode::PerFrame on load. */
+template<>
+struct TStructOpsTypeTraits<FPaperZDFlipbookAnimDataSource> : public TStructOpsTypeTraitsBase2<FPaperZDFlipbookAnimDataSource>
+{
+	enum
+	{
+		WithPostSerialize = true,
+	};
 };
